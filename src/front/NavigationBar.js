@@ -9,7 +9,7 @@ export default class NavigationBar extends Component {
         <div className="home">
           <Settings />
         </div>
-        <div className="logo">G</div>
+        <div className="logo">NS</div>
       </div>
     );
   }

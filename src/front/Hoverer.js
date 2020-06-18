@@ -47,7 +47,7 @@ export default class Hoverer extends Component {
       var hovered_cells = this.state.hovered_cells;
       var remove = [];
       hovered_cells.forEach((obj, index) => {
-        obj.cell.opacity -= 0.02;
+        obj.cell.opacity -= 0.04;
         if (obj.cell.opacity <= 0) remove.push(index);
       });
       hovered_cells = hovered_cells.filter(
@@ -65,7 +65,7 @@ export default class Hoverer extends Component {
     const offset_y = parseInt(y_wrt_origin / this.state.cell_size);
     const index = Math.abs(this.N * offset_x) + Math.abs(offset_y);
     const hovered = { cell: quadrant[index], index, quad };
-    
+
     if (quadrant[index].opacity <= 0) {
       quadrant[index].opacity = 1;
       const hovered_cells = this.state.hovered_cells;
