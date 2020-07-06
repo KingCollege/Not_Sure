@@ -38,17 +38,16 @@ export default class GraphVisual extends Component {
       },
       canvas_selected: false,
       origin: {
-        x: 1980 / 2,
-        y: 1024 / 2,
+        x: this.window_width / 2,
+        y: this.window_height / 2,
       },
       canvas_offset: { x: 0, y: 0 },
     };
   }
 
   componentDidMount() {
-    this.draw_cells();
-    console.log(this.window_height);
-    console.log(this.window_width);
+    this.redraw_all(0, 0);
+    this.track_screen_on_canvas();//
   }
 
   componentWillUnmount() {
@@ -56,6 +55,28 @@ export default class GraphVisual extends Component {
   }
 
   componentDidUpdate() {}
+
+  track_screen_on_canvas() {
+    const canvas = this.canvas_ref.current;
+    const ctx = canvas.getContext('2d');
+    // REMINDER: -40 is only for visual, can remove for later.
+    const p1 = {x: -this.x_offset, y: -this.y_offset};
+    const p2 = {x: window.innerWidth - this.x_offset - 40, y: -this.y_offset};
+    const p3 = {x: -this.x_offset, y: window.innerHeight - this.y_offset - 40};
+    const p4 = {x: window.innerWidth - this.x_offset - 40, y: window.innerHeight - this.y_offset - 40};
+    this.extend_screen(p1, p2, p3, p4);
+  }
+
+  extend_screen(p1, p2, p3, p4) {
+    const in_y_range = (y) =>{
+      if(y < 0 || y > this.window_height)
+        return false;
+    };
+    const in_x_range = (x) => {
+      if(x < 0 || x > this.window_width)
+        return false;
+    };
+  }
 
   mouse_move(event) {
     const last_mouse = this.state.last_mouse;
@@ -68,7 +89,9 @@ export default class GraphVisual extends Component {
     // + the current x and y of canvas, parsed because its stored as string
     if (this.state.canvas_selected) {
       this.translation(event, last_mouse);
+      // this.track_screen_on_canvas();//
     }
+
   }
 
   mouse_down() {
@@ -98,7 +121,8 @@ export default class GraphVisual extends Component {
       last_mouse.x - this.state.last_clicked.x + (event.target.style.x ? parseInt(event.target.style.x) : 0);
     this.y_offset =
       last_mouse.y - this.state.last_clicked.y + (event.target.style.y ? parseInt(event.target.style.y) : 0);
-    event.target.style.transform = `translate(` + this.x_offset + `px,` + this.y_offset + `px)`;
+    // event.target.style.transform = `translate(` + this.x_offset + `px,` + this.y_offset + `px)`;
+    this.redraw_all(this.x_offset, this.y_offset);
   }
 
   scroll_zoom(event) {
@@ -107,10 +131,10 @@ export default class GraphVisual extends Component {
     } else {
       this.zoom(1);
     }
-    this.redraw_all();
+    this.redraw_all(0, 0);
   }
 
-  zoom(dir) {
+  async zoom(dir)  {
     var cell_info = this.state.cell_info;
     cell_info.cell_size = cell_info.cell_size + dir;
     if (cell_info.cell_size > cell_info.const_cell_size * 2) {
@@ -124,24 +148,24 @@ export default class GraphVisual extends Component {
     });
   }
 
-  redraw_all() {
+  redraw_all(offset_x, offset_y) {
     const canvas = this.canvas_ref.current;
     const ctx = canvas.getContext("2d");
     ctx.setTransform();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    this.draw_cells();
+    this.draw_cells(offset_x,offset_y);
     this.draw_axis(ctx);
   }
 
-  draw_cells() {
+  draw_cells(offset_x, offset_y) {
     const canvas = this.canvas_ref.current;
     const ctx = canvas.getContext("2d");
     this.hovering_cells = [];
     //Clockwise Quadrants: DO NOT CHANGE
-    this.draw_quadrant(ctx, { x: 0, y: 0 }); //0
-    this.draw_quadrant(ctx, { x: this.window_width, y: 0 }); //1
-    this.draw_quadrant(ctx, { x: this.window_width, y: this.window_height }); //2
-    this.draw_quadrant(ctx, { x: 0, y: this.window_height }); //3
+    this.draw_quadrant(ctx, { x: 0 + offset_x, y: 0 + offset_y}); //0
+    this.draw_quadrant(ctx, { x: this.window_width + offset_x, y: 0 + offset_y}); //1
+    this.draw_quadrant(ctx, { x: this.window_width + offset_x, y: this.window_height + offset_y}); //2
+    this.draw_quadrant(ctx, { x: 0  + offset_x, y: this.window_height + offset_y }); //3
     this.draw_axis(ctx);
   }
 
@@ -179,18 +203,16 @@ export default class GraphVisual extends Component {
   }
 
   draw_axis(ctx) {
-    const mid_x = this.window_width / 2;
-    const mid_y = this.window_height / 2;
     ctx.lineWidth = 4;
     ctx.strokeStyle = "black";
     ctx.beginPath();
-    ctx.moveTo(mid_x, 0);
-    ctx.lineTo(mid_x, this.window_height);
+    ctx.moveTo(this.state.origin.x, 0);
+    ctx.lineTo(this.state.origin.x, this.window_height);
     ctx.stroke();
     ctx.strokeStyle = "black";
     ctx.beginPath();
-    ctx.moveTo(0, mid_y);
-    ctx.lineTo(this.window_width, mid_y);
+    ctx.moveTo(0, this.state.origin.y);
+    ctx.lineTo(this.window_width, this.state.origin.y);
     ctx.stroke();
     ctx.strokeStyle = this.state.cell_info.stroke_color;
   }
@@ -198,7 +220,7 @@ export default class GraphVisual extends Component {
   render() {
     return (
       <div>
-        <Hoverer
+        {/* <Hoverer
           cells_quad={this.hovering_cells}
           cell_size={this.state.cell_info.cell_size}
           origin={this.state.origin}
@@ -206,7 +228,7 @@ export default class GraphVisual extends Component {
           window_height={this.window_height}
           window_width={this.window_width}
           canvas_offset={this.state.canvas_offset}
-        />
+        /> */}
         <canvas
           ref={this.canvas_ref}
           width={this.window_width}
