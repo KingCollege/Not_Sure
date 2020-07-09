@@ -40,42 +40,22 @@ export default class GraphVisual extends Component {
       origin: {
         x: this.window_width / 2,
         y: this.window_height / 2,
+        extra_offset_x: 0,
+        extra_offset_y: 0,
       },
       canvas_offset: { x: 0, y: 0 },
     };
   }
 
   componentDidMount() {
-    this.redraw_all(0, 0);
-    this.track_screen_on_canvas();//
+    this.redraw_all();
   }
 
   componentWillUnmount() {
     console.log("unmounted");
   }
 
-  componentDidUpdate() {}
-
-  track_screen_on_canvas() {
-    const canvas = this.canvas_ref.current;
-    const ctx = canvas.getContext('2d');
-    // REMINDER: -40 is only for visual, can remove for later.
-    const p1 = {x: -this.x_offset, y: -this.y_offset};
-    const p2 = {x: window.innerWidth - this.x_offset - 40, y: -this.y_offset};
-    const p3 = {x: -this.x_offset, y: window.innerHeight - this.y_offset - 40};
-    const p4 = {x: window.innerWidth - this.x_offset - 40, y: window.innerHeight - this.y_offset - 40};
-    this.extend_screen(p1, p2, p3, p4);
-  }
-
-  extend_screen(p1, p2, p3, p4) {
-    const in_y_range = (y) =>{
-      if(y < 0 || y > this.window_height)
-        return false;
-    };
-    const in_x_range = (x) => {
-      if(x < 0 || x > this.window_width)
-        return false;
-    };
+  componentDidUpdate() {
   }
 
   mouse_move(event) {
@@ -84,12 +64,10 @@ export default class GraphVisual extends Component {
     last_mouse.y = event.clientY;
     last_mouse.x_wrt_canvas = event.clientX / this.state.cell_info.cell_size;
     last_mouse.y_wrt_canvas = event.clientY / this.state.cell_info.cell_size;
-    this.setState({ last_mouse });
     // When canvas selected, translate it w.t.r mouse position since last clicked
     // + the current x and y of canvas, parsed because its stored as string
     if (this.state.canvas_selected) {
       this.translation(event, last_mouse);
-      // this.track_screen_on_canvas();//
     }
 
   }
@@ -107,22 +85,32 @@ export default class GraphVisual extends Component {
       x: this.state.last_mouse.x,
       y: this.state.last_mouse.y,
     };
-    // Set offset as default position of canvas
-    event.target.style.x = this.x_offset;
-    event.target.style.y = this.y_offset;
     const canvas_offset = this.state.canvas_offset;
     canvas_offset.x = this.x_offset;
     canvas_offset.y = this.y_offset;
     this.setState({ canvas_selected: false, last_clicked, canvas_offset });
+    
+    if(this.x_offset == 0 && this.y_offset == 0) {
+      return;
+    }
+    // Set offset as default position of canvas
+    event.target.style.x = this.x_offset;
+    event.target.style.y = this.y_offset;
   }
 
   translation(event, last_mouse) {
     this.x_offset =
-      last_mouse.x - this.state.last_clicked.x + (event.target.style.x ? parseInt(event.target.style.x) : 0);
+      last_mouse.x - this.state.last_clicked.x + (event.target.style.x ? parseInt(event.target.style.x) : this.window_width / 2);
     this.y_offset =
-      last_mouse.y - this.state.last_clicked.y + (event.target.style.y ? parseInt(event.target.style.y) : 0);
-    // event.target.style.transform = `translate(` + this.x_offset + `px,` + this.y_offset + `px)`;
-    this.redraw_all(this.x_offset, this.y_offset);
+      last_mouse.y - this.state.last_clicked.y + (event.target.style.y ? parseInt(event.target.style.y) : this.window_height / 2);
+    
+    // Infinite Graph: Just change origin offset, then redraw everything from new origin. Jesus im stupid.
+    // if(this.x_offset > 0 && this.y_offset > 0) {
+      const origin = this.state.origin;
+      origin.x = this.x_offset + origin.extra_offset_x;
+      origin.y = this.y_offset + origin.extra_offset_y;
+      this.redraw_all();
+    // }
   }
 
   scroll_zoom(event) {
@@ -131,46 +119,51 @@ export default class GraphVisual extends Component {
     } else {
       this.zoom(1);
     }
-    this.redraw_all(0, 0);
+    this.redraw_all();
   }
 
-  async zoom(dir)  {
+  zoom(dir)  {
     var cell_info = this.state.cell_info;
     cell_info.cell_size = cell_info.cell_size + dir;
-    if (cell_info.cell_size > cell_info.const_cell_size * 2) {
-      cell_info.cell_size = cell_info.const_cell_size;
+    if (cell_info.cell_size > cell_info.const_cell_size + 10) {
+      cell_info.cell_size = cell_info.cell_size - dir;
+      dir = 0;
     }
-    if (cell_info.cell_size < cell_info.const_cell_size / 2) {
-      cell_info.cell_size = cell_info.const_cell_size;
+    else if (cell_info.cell_size < cell_info.const_cell_size - 5) {
+      cell_info.cell_size = cell_info.cell_size - dir;
+      dir = 0;
     }
-    this.setState({
-      cell_info,
-    });
+    const origin = this.state.origin;
+    const x_diff = origin.x - this.state.last_mouse.x;
+    const y_diff = origin.y - this.state.last_mouse.y;
+    origin.extra_offset_x += (Math.sign( Math.abs(x_diff) > 5 ? x_diff : 0 ) * 10)*dir;
+    origin.extra_offset_y += (Math.sign(Math.abs(y_diff) > 5 ? y_diff : 0) * 10)*dir;
+    origin.x += (Math.sign(Math.abs(x_diff) > 5 ? x_diff : 0) * 10)*dir;
+    origin.y += (Math.sign(Math.abs(y_diff) > 5 ? y_diff : 0) * 10)*dir;
   }
 
-  redraw_all(offset_x, offset_y) {
+  redraw_all() {
     const canvas = this.canvas_ref.current;
     const ctx = canvas.getContext("2d");
     ctx.setTransform();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    this.draw_cells(offset_x,offset_y);
+    this.draw_cells();
     this.draw_axis(ctx);
   }
 
-  draw_cells(offset_x, offset_y) {
+  draw_cells() {
     const canvas = this.canvas_ref.current;
     const ctx = canvas.getContext("2d");
     this.hovering_cells = [];
     //Clockwise Quadrants: DO NOT CHANGE
-    this.draw_quadrant(ctx, { x: 0 + offset_x, y: 0 + offset_y}); //0
-    this.draw_quadrant(ctx, { x: this.window_width + offset_x, y: 0 + offset_y}); //1
-    this.draw_quadrant(ctx, { x: this.window_width + offset_x, y: this.window_height + offset_y}); //2
-    this.draw_quadrant(ctx, { x: 0  + offset_x, y: this.window_height + offset_y }); //3
-    this.draw_axis(ctx);
+    this.draw_quadrant(ctx, { x: 0, y: 0}); //0
+    this.draw_quadrant(ctx, { x: this.window_width, y: 0}); //1
+    this.draw_quadrant(ctx, { x: this.window_width, y: this.window_height }); //2
+    this.draw_quadrant(ctx, { x: 0, y: this.window_height}); //3
+    this.draw_axis(ctx );
   }
-
-  // origin_pos = (0,0) w.r.t screen
-  draw_quadrant(ctx, quad_limit) {
+  
+  draw_quadrant(ctx, quad_limit ) {
     this.hovering_cells.push([]);
     const x_incr = this.state.origin.x > quad_limit.x ? -1 : 1;
     const y_incr = this.state.origin.y > quad_limit.y ? 1 : -1;
@@ -179,11 +172,10 @@ export default class GraphVisual extends Component {
       y: this.state.origin.y / this.state.cell_info.cell_size + (y_incr > 0 ? -1 : 0),
       width: quad_limit.x / this.state.cell_info.cell_size + (x_incr > 0 ? 0 : -1),
       height: quad_limit.y / this.state.cell_info.cell_size + (y_incr < 0 ? 0 : -1),
-    };
+    };  
     ctx.fillStyle = this.state.cell_info.cell_color;
     ctx.strokeStyle = this.state.cell_info.stroke_color;
     // Multiply by -1 we can switch the inequality
-
     for (var x = wrt_cell.x; x * x_incr < wrt_cell.width * x_incr; x += x_incr) {
       for (var y = wrt_cell.y; y * y_incr > wrt_cell.height * y_incr; y -= y_incr) {
         ctx.lineWidth = 0.75;
@@ -202,7 +194,7 @@ export default class GraphVisual extends Component {
     }
   }
 
-  draw_axis(ctx) {
+  draw_axis(ctx ) {
     ctx.lineWidth = 4;
     ctx.strokeStyle = "black";
     ctx.beginPath();
@@ -242,7 +234,7 @@ export default class GraphVisual extends Component {
           onMouseMove={this.mouse_move.bind(this)}
           onMouseDown={this.mouse_down.bind(this)}
           onMouseUp={this.mouse_up.bind(this)}
-          onMouseLeave={this.mouse_up.bind(this)}
+          // onMouseLeave={this.mouse_up.bind(this)}
         />
       </div>
     );

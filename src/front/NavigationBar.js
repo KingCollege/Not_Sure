@@ -6,10 +6,10 @@ export default class NavigationBar extends Component {
   render() {
     return (
       <div className="navigation-container">
-        <div className="home">
-          <Settings />
+        <div className="links">
+          Home
         </div>
-        <div className="logo">NS</div>
+        <Settings />
       </div>
     );
   }
