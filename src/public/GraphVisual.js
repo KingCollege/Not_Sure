@@ -1,51 +1,17 @@
 import React, { Component } from 'react'
 import './css/GraphVisual.css'
 import Hoverer from './Hoverer'
+import { give_mouse_pos, grid_initialise, change_cell_info, change_origin } from '../private/actions/GridActionCreator'
+import { mouse_pos_change, mouse_left_click, SELECTABLE_COMPONENT } from '../private/actions/MouseActionCreator'
+import { connect } from 'react-redux'
 
-export default class GraphVisual extends Component {
+class GraphVisual extends Component {
     constructor(props) {
         super(props)
         this.canvas_ref = React.createRef()
         this.x_offset = 0
         this.y_offset = 0
         this.hovering_cells = []
-        this.grid_edge = {
-            top: { y: 0, x: 0 },
-            bottom: { y: 0, x: 0 },
-            left: { y: 0, x: 0 },
-            right: { y: 0, x: 0 },
-        }
-        this.window_width = 1980
-        this.window_height = 1024
-        this.state = {
-            cell_info: {
-                cell_color: '#4397AC',
-                stroke_color: 'grey',
-                stroke_width: '1',
-                cell_size: 25,
-                const_cell_size: 25,
-                enlargement: 4,
-            },
-            last_mouse: {
-                x_wrt_canvas: 0,
-                y_wrt_canvas: 0,
-                x: 0,
-                y: 0,
-            },
-            last_clicked: {
-                x: 0,
-                y: 0,
-                button: 0,
-            },
-            canvas_selected: false,
-            origin: {
-                x: this.window_width / 2,
-                y: this.window_height / 2,
-                extra_offset_x: 0,
-                extra_offset_y: 0,
-            },
-            canvas_offset: { x: 0, y: 0 },
-        }
     }
 
     componentDidMount() {
@@ -56,17 +22,27 @@ export default class GraphVisual extends Component {
         console.log('unmounted')
     }
 
-    componentDidUpdate() {}
+    componentDidUpdate(prev_props) {
+        if (prev_props.grid.cell_info != this.props.grid.cell_info) {
+            this.redraw_all()
+        }
+
+        if (prev_props != this.props) {
+            const canvas = this.canvas_ref.current
+            const ctx = canvas.getContext('2d')
+            this.draw_persist_cell(ctx)
+        }
+    }
 
     mouse_move(event) {
-        const last_mouse = this.state.last_mouse
-        last_mouse.x = event.clientX
-        last_mouse.y = event.clientY
-        last_mouse.x_wrt_canvas = event.clientX / this.state.cell_info.cell_size
-        last_mouse.y_wrt_canvas = event.clientY / this.state.cell_info.cell_size
-        // When canvas selected, translate it w.t.r mouse position since last clicked
-        // + the current x and y of canvas, parsed because its stored as string
-        if (this.state.canvas_selected) {
+        const last_mouse = {
+            x: event.clientX,
+            y: event.clientY,
+            x_wrt_canvas: event.clientX / this.props.grid.cell_info.cell_size,
+            y_wrt_canvas: event.clientY / this.props.grid.cell_info.cell_size,
+        }
+        this.props.mouse_pos_change(last_mouse)
+        if (this.props.component_selected === SELECTABLE_COMPONENT.GRID) {
             this.translation(event, last_mouse)
         } else {
             this.setState({ last_mouse })
@@ -75,35 +51,17 @@ export default class GraphVisual extends Component {
 
     mouse_down(event) {
         if (event.button === 0) {
-            const last_clicked = {
-                x: this.state.last_mouse.x,
-                y: this.state.last_mouse.y,
-                button: 0,
-            }
-            this.setState({ canvas_selected: true, last_clicked })
+            this.props.mouse_left_click({ bool: true, pos: this.props.mouse_pos, component: SELECTABLE_COMPONENT.GRID })
         }
         if (event.button === 2) {
-            // When Right button is pressed, pass
-            // position to Hoverer.js using redux dispatch
-            const last_clicked = {
-                x: this.state.last_mouse.x,
-                y: this.state.last_mouse.y,
-                button: 2,
-            }
-            this.setState({ last_clicked })
+            // const x_wrt_origin = parseInt(this.props.grid.origin.x - this.state.last_mouse.x)
+            // const y_wrt_origin = parseInt(this.props.grid.origin.y - this.state.last_mouse.y)
+            this.props.select_cell({ x: event.clientX, y: event.clientY })
         }
     }
 
     mouse_up(event) {
-        const last_clicked = {
-            x: this.state.last_mouse.x,
-            y: this.state.last_mouse.y,
-        }
-        const canvas_offset = this.state.canvas_offset
-        canvas_offset.x = this.x_offset
-        canvas_offset.y = this.y_offset
-        this.setState({ canvas_selected: false, last_clicked, canvas_offset })
-
+        this.props.mouse_left_click({ bool: false, pos: this.props.mouse_pos, component: SELECTABLE_COMPONENT.NONE })
         if (this.x_offset == 0 && this.y_offset == 0) {
             return
         }
@@ -115,18 +73,18 @@ export default class GraphVisual extends Component {
     translation(event, last_mouse) {
         this.x_offset =
             last_mouse.x -
-            this.state.last_clicked.x +
-            (event.target.style.x ? parseInt(event.target.style.x) : this.window_width / 2)
+            this.props.mouse_left_click_pos.x +
+            (event.target.style.x ? parseInt(event.target.style.x) : this.props.grid.grid_width / 2)
         this.y_offset =
             last_mouse.y -
-            this.state.last_clicked.y +
-            (event.target.style.y ? parseInt(event.target.style.y) : this.window_height / 2)
+            this.props.mouse_left_click_pos.y +
+            (event.target.style.y ? parseInt(event.target.style.y) : this.props.grid.grid_height / 2)
 
         // Infinite Graph: Just change origin offset, then redraw everything from new origin. Jesus im stupid.
-        const origin = this.state.origin
+        const origin = { ...this.props.grid.origin }
         origin.x = this.x_offset + origin.extra_offset_x
         origin.y = this.y_offset + origin.extra_offset_y
-        // this.setState({origin});
+        this.props.change_origin(origin)
         this.redraw_all()
     }
 
@@ -136,11 +94,10 @@ export default class GraphVisual extends Component {
         } else {
             this.zoom(1)
         }
-        this.redraw_all()
     }
 
     zoom(dir) {
-        var cell_info = this.state.cell_info
+        var cell_info = { ...this.props.grid.cell_info }
         cell_info.cell_size = cell_info.cell_size + dir
         if (cell_info.cell_size > cell_info.const_cell_size + 10) {
             cell_info.cell_size = cell_info.cell_size - dir
@@ -149,13 +106,16 @@ export default class GraphVisual extends Component {
             cell_info.cell_size = cell_info.cell_size - dir
             dir = 0
         }
-        const origin = this.state.origin
-        const x_diff = origin.x - this.state.last_mouse.x
-        const y_diff = origin.y - this.state.last_mouse.y
+
+        this.props.change_cell_info(cell_info)
+        const origin = { ...this.props.grid.origin }
+        const x_diff = origin.x - this.props.mouse_pos.x
+        const y_diff = origin.y - this.props.mouse_pos.y
         origin.extra_offset_x += Math.sign(Math.abs(x_diff) > 5 ? x_diff : 0) * 10 * dir
         origin.extra_offset_y += Math.sign(Math.abs(y_diff) > 5 ? y_diff : 0) * 10 * dir
         origin.x += Math.sign(Math.abs(x_diff) > 5 ? x_diff : 0) * 10 * dir
         origin.y += Math.sign(Math.abs(y_diff) > 5 ? y_diff : 0) * 10 * dir
+        this.props.change_origin(origin)
     }
 
     redraw_all() {
@@ -165,6 +125,7 @@ export default class GraphVisual extends Component {
         ctx.clearRect(0, 0, canvas.width, canvas.height)
         this.draw_cells()
         this.draw_axis(ctx)
+        this.draw_persist_cell(ctx)
     }
 
     draw_cells() {
@@ -173,74 +134,91 @@ export default class GraphVisual extends Component {
         this.hovering_cells = []
         //Clockwise Quadrants: DO NOT CHANGE
         this.draw_quadrant(ctx, { x: 0, y: 0 }) //0
-        this.draw_quadrant(ctx, { x: this.window_width, y: 0 }) //1
-        this.draw_quadrant(ctx, { x: this.window_width, y: this.window_height }) //2
-        this.draw_quadrant(ctx, { x: 0, y: this.window_height }) //3
+        this.draw_quadrant(ctx, { x: this.props.grid.grid_width, y: 0 }) //1
+        this.draw_quadrant(ctx, { x: this.props.grid.grid_width, y: this.props.grid.grid_height }) //2
+        this.draw_quadrant(ctx, { x: 0, y: this.props.grid.grid_height }) //3
         this.draw_axis(ctx)
     }
 
     draw_quadrant(ctx, quad_limit) {
         this.hovering_cells.push([])
-        const x_incr = this.state.origin.x > quad_limit.x ? -1 : 1
-        const y_incr = this.state.origin.y > quad_limit.y ? 1 : -1
+        const x_incr = this.props.grid.origin.x > quad_limit.x ? -1 : 1
+        const y_incr = this.props.grid.origin.y > quad_limit.y ? 1 : -1
         const wrt_cell = {
-            x: this.state.origin.x / this.state.cell_info.cell_size + (x_incr > 0 ? 0 : -1),
-            y: this.state.origin.y / this.state.cell_info.cell_size + (y_incr > 0 ? -1 : 0),
-            width: quad_limit.x / this.state.cell_info.cell_size + (x_incr > 0 ? 0 : -1),
-            height: quad_limit.y / this.state.cell_info.cell_size + (y_incr < 0 ? 0 : -1),
+            x: this.props.grid.origin.x / this.props.grid.cell_info.cell_size + (x_incr > 0 ? 0 : -1),
+            y: this.props.grid.origin.y / this.props.grid.cell_info.cell_size + (y_incr > 0 ? -1 : 0),
+            width: quad_limit.x / this.props.grid.cell_info.cell_size + (x_incr > 0 ? 0 : -1),
+            height: quad_limit.y / this.props.grid.cell_info.cell_size + (y_incr < 0 ? 0 : -1),
         }
-        ctx.fillStyle = this.state.cell_info.cell_color
-        ctx.strokeStyle = this.state.cell_info.stroke_color
+        ctx.fillStyle = this.props.grid.cell_info.cell_color
+        ctx.strokeStyle = this.props.grid.cell_info.stroke_color
+        ctx.lineWidth = 0.75
         // Multiply by -1 we can switch the inequality
         for (var x = wrt_cell.x; x * x_incr < wrt_cell.width * x_incr; x += x_incr) {
             for (var y = wrt_cell.y; y * y_incr > wrt_cell.height * y_incr; y -= y_incr) {
-                ctx.lineWidth = 0.75
                 ctx.strokeRect(
-                    x * this.state.cell_info.cell_size,
-                    y * this.state.cell_info.cell_size,
-                    this.state.cell_info.cell_size,
-                    this.state.cell_info.cell_size
+                    x * this.props.grid.cell_info.cell_size,
+                    y * this.props.grid.cell_info.cell_size,
+                    this.props.grid.cell_info.cell_size,
+                    this.props.grid.cell_info.cell_size
                 )
                 this.hovering_cells[this.hovering_cells.length - 1].push({
-                    x: x * this.state.cell_info.cell_size,
-                    y: y * this.state.cell_info.cell_size,
+                    x: x * this.props.grid.cell_info.cell_size,
+                    y: y * this.props.grid.cell_info.cell_size,
                     opacity: 0,
                 })
             }
         }
     }
 
+    // ISSUE: Crashes when out of screen
+    draw_persist_cell(ctx) {
+        ctx.fillStyle = 'black'
+        this.props.grid.persist_cells.forEach((cell) => {
+            const x_quad = cell.x_wrt_origin > -1 ? -1 : 0
+            const y_quad = cell.y_wrt_origin > -1 ? 1 : 0
+            ctx.fillRect(
+                this.props.grid.origin.x -
+                    (parseInt(cell.x_wrt_origin / this.props.grid.cell_info.cell_size) - x_quad) *
+                        this.props.grid.cell_info.cell_size,
+                this.props.grid.origin.y -
+                    (parseInt(cell.y_wrt_origin / this.props.grid.cell_info.cell_size) + y_quad) *
+                        this.props.grid.cell_info.cell_size,
+                this.props.grid.cell_info.cell_size,
+                this.props.grid.cell_info.cell_size
+            )
+        })
+    }
+
     draw_axis(ctx) {
         ctx.lineWidth = 4
         ctx.strokeStyle = 'black'
         ctx.beginPath()
-        ctx.moveTo(this.state.origin.x, 0)
-        ctx.lineTo(this.state.origin.x, this.window_height)
+        ctx.moveTo(this.props.grid.origin.x, 0)
+        ctx.lineTo(this.props.grid.origin.x, this.props.grid.grid_height)
         ctx.stroke()
         ctx.strokeStyle = 'black'
         ctx.beginPath()
-        ctx.moveTo(0, this.state.origin.y)
-        ctx.lineTo(this.window_width, this.state.origin.y)
+        ctx.moveTo(0, this.props.grid.origin.y)
+        ctx.lineTo(this.props.grid.grid_width, this.props.grid.origin.y)
         ctx.stroke()
-        ctx.strokeStyle = this.state.cell_info.stroke_color
+        ctx.strokeStyle = this.props.grid.cell_info.stroke_color
     }
 
     render() {
         return (
             <div>
-                <Hoverer
+                {/* <Hoverer
                     cells_quad={this.hovering_cells}
-                    cell_size={this.state.cell_info.cell_size}
-                    origin={this.state.origin}
-                    last_mouse={this.state.last_mouse}
-                    window_height={this.window_height}
-                    window_width={this.window_width}
-                    last_clicked={this.state.last_clicked}
-                />
+                    cell_size={this.props.grid.cell_info.cell_size}
+                    origin={this.props.grid.origin}
+                    window_height={this.props.grid.grid_height}
+                    window_width={this.props.grid.grid_height}
+                /> */}
                 <canvas
                     ref={this.canvas_ref}
-                    width={this.window_width}
-                    height={this.window_height}
+                    width={this.props.grid.grid_width}
+                    height={this.props.grid.grid_height}
                     className='main-canvas'
                     onContextMenu={(e) => {
                         e.preventDefault() // disables default browser behaviour
@@ -256,3 +234,21 @@ export default class GraphVisual extends Component {
         )
     }
 }
+
+const mapStateToProps = (state) => ({
+    grid: state.grid_cell,
+    mouse_pos: state.mouse.mouse_pos,
+    mouse_left_click_pos: state.mouse.mouse_left_click_pos,
+    component_selected: state.mouse.component_selected,
+})
+
+const mapDispatchToProps = (dispatch) => ({
+    select_cell: (pos) => dispatch(give_mouse_pos(pos)),
+    mouse_pos_change: (pos) => dispatch(mouse_pos_change(pos)),
+    mouse_left_click: (bool) => dispatch(mouse_left_click(bool)),
+    grid_initialise: (info) => dispatch(grid_initialise(info)),
+    change_cell_info: (info) => dispatch(change_cell_info(info)),
+    change_origin: (origin) => dispatch(change_origin(origin)),
+})
+
+export default connect(mapStateToProps, mapDispatchToProps)(GraphVisual)

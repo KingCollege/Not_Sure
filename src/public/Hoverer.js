@@ -1,7 +1,9 @@
 import React, { Component } from 'react'
 import './css/Hoverer.css'
+import { give_cell } from '../private/actions/GridActionCreator'
+import { connect } from 'react-redux'
 
-export default class Hoverer extends Component {
+class Hoverer extends Component {
     constructor(props) {
         super(props)
         this.canvas_ref = React.createRef()
@@ -20,7 +22,6 @@ export default class Hoverer extends Component {
                 y: 0,
             },
             last_mouse: { x: 0, y: 0 },
-            last_clicked: { x: 0, y: 0, button: 0 },
             persistent_cell: [],
         }
     }
@@ -36,8 +37,8 @@ export default class Hoverer extends Component {
     async componentDidUpdate(prev_props) {
         if (this.props != prev_props) {
             await this.setState({ ...this.props })
-            this.detect_hover_quadrant(this.state.last_mouse)
         }
+        this.detect_hover_quadrant(this.props.moving_mouse_pos)
         this.draw_cells()
     }
 
@@ -46,7 +47,7 @@ export default class Hoverer extends Component {
             var hovered_cells = this.state.hovered_cells
             var remove = []
             hovered_cells.forEach((obj, index) => {
-                obj.cell.opacity -= 0.04
+                obj.cell.opacity -= 0.02
                 if (obj.cell.opacity <= 0) remove.push(index)
             })
             hovered_cells = hovered_cells.filter((_, index) => !remove.includes(index))
@@ -55,23 +56,24 @@ export default class Hoverer extends Component {
         requestAnimationFrame(this.decaying_hovers)
     }
 
-    detect_cell(quadrant, x_wrt_origin, y_wrt_origin, quad) {
+    detect_cell(quadrant, x_wrt_origin, y_wrt_origin, quadrant_index) {
         // For some x, it repeats N times, once for each y. So our indexing is +N
         this.find_N(quadrant)
         const offset_x = parseInt(x_wrt_origin / this.state.cell_size)
         const offset_y = parseInt(y_wrt_origin / this.state.cell_size)
         const index = Math.abs(this.N * offset_x) + Math.abs(offset_y)
-        const hovered = { cell: quadrant[index], index, quad }
+        const hovered = { cell: quadrant[index], index, quadrant_index }
 
-        const persist =
-            Math.abs(quadrant[index].x - this.state.last_clicked.x) +
-                Math.abs(quadrant[index].y - this.state.last_clicked.y) <=
-            this.state.cell_size * 2
-                ? true
-                : false
-        if (persist && this.state.last_clicked.button === 2) {
-            this.state.persistent_cell.push(quadrant[index])
-            return
+        if (this.props.mouse_pos.x) {
+            const persist =
+                Math.abs(quadrant[index].x - this.props.mouse_pos.x) +
+                    Math.abs(quadrant[index].y - this.props.mouse_pos.y) <=
+                2 * this.state.cell_size
+                    ? true
+                    : false
+            if (persist) {
+                this.props.give_cell({ x_wrt_origin, y_wrt_origin })
+            }
         }
 
         if (quadrant[index].opacity <= 0) {
@@ -96,23 +98,11 @@ export default class Hoverer extends Component {
         const canvas = this.canvas_ref.current
         const ctx = canvas.getContext('2d')
         ctx.clearRect(0, 0, canvas.width, canvas.height)
-        this.draw_persist_cell(ctx)
         ctx.fillStyle = 'orange'
         this.state.hovered_cells.forEach((obj) => {
             ctx.globalAlpha = obj.cell.opacity
             ctx.fillRect(obj.cell.x, obj.cell.y, this.state.cell_size, this.state.cell_size)
         })
-    }
-
-    draw_persist_cell(ctx) {
-        console.log(this.state.persistent_cell.length)
-        if (this.state.persistent_cell.length > 0) {
-            ctx.fillStyle = 'black'
-            this.state.persistent_cell.forEach((obj) => {
-                ctx.globalAlpha = 1
-                ctx.fillRect(obj.x, obj.y, this.state.cell_size, this.state.cell_size)
-            })
-        }
     }
 
     detect_hover_quadrant(last_mouse) {
@@ -131,20 +121,6 @@ export default class Hoverer extends Component {
         }
     }
 
-    mouse_down(event) {
-        if (event.button === 2) {
-            //right click
-            const persist = this.state.hovered_cells[this.state.hovered_cells.length - 1]
-            console.log(persist)
-            this.state.persistent_cell.push(persist)
-            const canvas = this.canvas_ref.current
-            const ctx = canvas.getContext('2d')
-            ctx.fillStyle = 'orange'
-            ctx.globalAlpha = 1
-            ctx.fillRect(persist.x, persist.y, this.state.cell_size, this.state.cell_size)
-        }
-    }
-
     render() {
         return (
             <canvas
@@ -152,8 +128,19 @@ export default class Hoverer extends Component {
                 width={this.state.window_width}
                 height={this.state.window_height}
                 className='hovering_grid'
-                onMouseDown={this.mouse_down.bind(this)}
             />
         )
     }
 }
+
+const mapStateToProps = (state) => ({
+    mouse_pos: state.grid_cell.mouse_pos,
+    moving_mouse_pos: state.mouse.mouse_pos,
+    mouse_left_click: state.mouse.mouse_left_click,
+})
+
+const mapDispatchToProps = (dispatch) => ({
+    give_cell: (cell) => dispatch(give_cell(cell)),
+})
+
+export default connect(mapStateToProps, mapDispatchToProps)(Hoverer)

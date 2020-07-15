@@ -1,6 +1,7 @@
 import { combineReducers } from 'redux'
-import SelectCellReducer from './SelectCellReducer'
-
+import GridCellReducer from './GridReducer'
+import MouseReducer from './MouseReducer'
 export default combineReducers({
-    SelectCellReducer,
+    grid_cell: GridCellReducer,
+    mouse: MouseReducer,
 })
