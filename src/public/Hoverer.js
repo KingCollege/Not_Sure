@@ -12,16 +12,7 @@ class Hoverer extends Component {
         this.hover_colours = ['purple', 'blue', 'green', 'yellow', 'orange', 'red']
         this.colour_index = 0
         this.state = {
-            cells_quad: [],
             hovered_cells: [],
-            cell_size: 0,
-            window_width: 1980,
-            window_height: 1024,
-            origin: {
-                x: 0,
-                y: 0,
-            },
-            last_mouse: { x: 0, y: 0 },
             persistent_cell: [],
         }
     }
@@ -34,11 +25,10 @@ class Hoverer extends Component {
         cancelAnimationFrame(this.a_ref)
     }
 
-    async componentDidUpdate(prev_props) {
-        if (this.props != prev_props) {
-            await this.setState({ ...this.props })
+    componentDidUpdate(prev_props) {
+        if (this.props.moving_mouse_pos != prev_props.moving_mouse_pos) {
+            this.detect_cell()
         }
-        this.detect_hover_quadrant(this.props.moving_mouse_pos)
         this.draw_cells()
     }
 
@@ -47,8 +37,8 @@ class Hoverer extends Component {
             var hovered_cells = this.state.hovered_cells
             var remove = []
             hovered_cells.forEach((obj, index) => {
-                obj.cell.opacity -= 0.02
-                if (obj.cell.opacity <= 0) remove.push(index)
+                obj.opacity -= 0.02
+                if (obj.opacity <= 0) remove.push(index)
             })
             hovered_cells = hovered_cells.filter((_, index) => !remove.includes(index))
             this.setState({ hovered_cells })
@@ -56,42 +46,20 @@ class Hoverer extends Component {
         requestAnimationFrame(this.decaying_hovers)
     }
 
-    detect_cell(quadrant, x_wrt_origin, y_wrt_origin, quadrant_index) {
+    detect_cell() {
         // For some x, it repeats N times, once for each y. So our indexing is +N
-        this.find_N(quadrant)
-        const offset_x = parseInt(x_wrt_origin / this.state.cell_size)
-        const offset_y = parseInt(y_wrt_origin / this.state.cell_size)
-        const index = Math.abs(this.N * offset_x) + Math.abs(offset_y)
-        const hovered = { cell: quadrant[index], index, quadrant_index }
-
-        if (this.props.mouse_pos.x) {
-            const persist =
-                Math.abs(quadrant[index].x - this.props.mouse_pos.x) +
-                    Math.abs(quadrant[index].y - this.props.mouse_pos.y) <=
-                2 * this.state.cell_size
-                    ? true
-                    : false
-            if (persist) {
-                this.props.give_cell({ x_wrt_origin, y_wrt_origin })
-            }
+        const x_quad = this.props.moving_mouse_pos.x_wrt_origin > -1 ? 1 : 0
+        const y_quad = this.props.moving_mouse_pos.y_wrt_origin > -1 ? 1 : 0
+        const cell = {
+            x_wrt_origin: this.props.moving_mouse_pos.x_wrt_origin,
+            y_wrt_origin: this.props.moving_mouse_pos.y_wrt_origin,
+            x_quad,
+            y_quad,
+            opacity: 1,
         }
-
-        if (quadrant[index].opacity <= 0) {
-            quadrant[index].opacity = 1
-            const hovered_cells = this.state.hovered_cells
-            hovered_cells.push(hovered)
-            this.setState({ hovered_cells })
-        }
-    }
-
-    find_N(quadrant) {
-        var temp = quadrant[0].x
-        for (var i = 1; i < quadrant.length; i++) {
-            if (temp != quadrant[i].x) {
-                this.N = i
-                break
-            }
-        }
+        const hovered_cells = this.state.hovered_cells
+        hovered_cells.push(cell)
+        this.setState({ hovered_cells })
     }
 
     draw_cells() {
@@ -100,33 +68,26 @@ class Hoverer extends Component {
         ctx.clearRect(0, 0, canvas.width, canvas.height)
         ctx.fillStyle = 'orange'
         this.state.hovered_cells.forEach((obj) => {
-            ctx.globalAlpha = obj.cell.opacity
-            ctx.fillRect(obj.cell.x, obj.cell.y, this.state.cell_size, this.state.cell_size)
+            ctx.globalAlpha = obj.opacity
+            ctx.fillRect(
+                this.props.grid.origin.x -
+                    (parseInt(obj.x_wrt_origin / this.props.grid.cell_info.cell_size) + obj.x_quad) *
+                        this.props.grid.cell_info.cell_size,
+                this.props.grid.origin.y -
+                    (parseInt(obj.y_wrt_origin / this.props.grid.cell_info.cell_size) + obj.y_quad) *
+                        this.props.grid.cell_info.cell_size,
+                this.props.grid.cell_info.cell_size,
+                this.props.grid.cell_info.cell_size
+            )
         })
-    }
-
-    detect_hover_quadrant(last_mouse) {
-        const x_wrt_origin = parseInt(this.state.origin.x - last_mouse.x)
-        const y_wrt_origin = parseInt(this.state.origin.y - last_mouse.y)
-        const x_quad = x_wrt_origin > -1 ? -1 : 1
-        const y_quad = y_wrt_origin > -1 ? 1 : -1
-        if (x_quad === -1 && y_quad === 1) {
-            this.detect_cell(this.state.cells_quad[0], x_wrt_origin, y_wrt_origin, 0)
-        } else if (x_quad === 1 && y_quad === 1) {
-            this.detect_cell(this.state.cells_quad[1], x_wrt_origin, y_wrt_origin, 1)
-        } else if (x_quad === 1 && y_quad === -1) {
-            this.detect_cell(this.state.cells_quad[2], x_wrt_origin, y_wrt_origin, 2)
-        } else if (x_quad === -1 && y_quad === -1) {
-            this.detect_cell(this.state.cells_quad[3], x_wrt_origin, y_wrt_origin, 3)
-        }
     }
 
     render() {
         return (
             <canvas
                 ref={this.canvas_ref}
-                width={this.state.window_width}
-                height={this.state.window_height}
+                width={this.props.grid.grid_width}
+                height={this.props.grid.grid_height}
                 className='hovering_grid'
             />
         )
@@ -134,13 +95,11 @@ class Hoverer extends Component {
 }
 
 const mapStateToProps = (state) => ({
-    mouse_pos: state.grid_cell.mouse_pos,
+    grid: state.grid_cell,
     moving_mouse_pos: state.mouse.mouse_pos,
     mouse_left_click: state.mouse.mouse_left_click,
 })
 
-const mapDispatchToProps = (dispatch) => ({
-    give_cell: (cell) => dispatch(give_cell(cell)),
-})
+const mapDispatchToProps = (dispatch) => ({})
 
 export default connect(mapStateToProps, mapDispatchToProps)(Hoverer)

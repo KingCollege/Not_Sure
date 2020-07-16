@@ -11,7 +11,7 @@ class GraphVisual extends Component {
         this.canvas_ref = React.createRef()
         this.x_offset = 0
         this.y_offset = 0
-        this.hovering_cells = []
+        this.DEBUG_COUNT = 0
     }
 
     componentDidMount() {
@@ -23,11 +23,11 @@ class GraphVisual extends Component {
     }
 
     componentDidUpdate(prev_props) {
-        if (prev_props.grid.cell_info != this.props.grid.cell_info) {
+        if (prev_props.grid.cell_info !== this.props.grid.cell_info) {
             this.redraw_all()
         }
 
-        if (prev_props != this.props) {
+        if (prev_props !== this.props) {
             const canvas = this.canvas_ref.current
             const ctx = canvas.getContext('2d')
             this.draw_persist_cell(ctx)
@@ -38,8 +38,8 @@ class GraphVisual extends Component {
         const last_mouse = {
             x: event.clientX,
             y: event.clientY,
-            x_wrt_canvas: event.clientX / this.props.grid.cell_info.cell_size,
-            y_wrt_canvas: event.clientY / this.props.grid.cell_info.cell_size,
+            x_wrt_origin: parseInt(this.props.grid.origin.x - event.clientX),
+            y_wrt_origin: parseInt(this.props.grid.origin.y - event.clientY),
         }
         this.props.mouse_pos_change(last_mouse)
         if (this.props.component_selected === SELECTABLE_COMPONENT.GRID) {
@@ -70,7 +70,7 @@ class GraphVisual extends Component {
         event.target.style.y = this.y_offset
     }
 
-    translation(event, last_mouse) {
+    async translation(event, last_mouse) {
         this.x_offset =
             last_mouse.x -
             this.props.mouse_left_click_pos.x +
@@ -84,7 +84,7 @@ class GraphVisual extends Component {
         const origin = { ...this.props.grid.origin }
         origin.x = this.x_offset + origin.extra_offset_x
         origin.y = this.y_offset + origin.extra_offset_y
-        this.props.change_origin(origin)
+        await this.props.change_origin(origin)
         this.redraw_all()
     }
 
@@ -123,15 +123,16 @@ class GraphVisual extends Component {
         const ctx = canvas.getContext('2d')
         ctx.setTransform()
         ctx.clearRect(0, 0, canvas.width, canvas.height)
+        this.DEBUG_COUNT = 0
         this.draw_cells()
         this.draw_axis(ctx)
         this.draw_persist_cell(ctx)
+        console.log('Debug Count: ' + this.DEBUG_COUNT)
     }
 
     draw_cells() {
         const canvas = this.canvas_ref.current
         const ctx = canvas.getContext('2d')
-        this.hovering_cells = []
         //Clockwise Quadrants: DO NOT CHANGE
         this.draw_quadrant(ctx, { x: 0, y: 0 }) //0
         this.draw_quadrant(ctx, { x: this.props.grid.grid_width, y: 0 }) //1
@@ -140,8 +141,9 @@ class GraphVisual extends Component {
         this.draw_axis(ctx)
     }
 
+    // OPTIMISATION IDEAS:
+    // - Draw lines instead of cells and then just consider space between lines
     draw_quadrant(ctx, quad_limit) {
-        this.hovering_cells.push([])
         const x_incr = this.props.grid.origin.x > quad_limit.x ? -1 : 1
         const y_incr = this.props.grid.origin.y > quad_limit.y ? 1 : -1
         const wrt_cell = {
@@ -162,11 +164,7 @@ class GraphVisual extends Component {
                     this.props.grid.cell_info.cell_size,
                     this.props.grid.cell_info.cell_size
                 )
-                this.hovering_cells[this.hovering_cells.length - 1].push({
-                    x: x * this.props.grid.cell_info.cell_size,
-                    y: y * this.props.grid.cell_info.cell_size,
-                    opacity: 0,
-                })
+                this.DEBUG_COUNT += 1
             }
         }
     }
@@ -208,13 +206,7 @@ class GraphVisual extends Component {
     render() {
         return (
             <div>
-                {/* <Hoverer
-                    cells_quad={this.hovering_cells}
-                    cell_size={this.props.grid.cell_info.cell_size}
-                    origin={this.props.grid.origin}
-                    window_height={this.props.grid.grid_height}
-                    window_width={this.props.grid.grid_height}
-                /> */}
+                {/* <Hoverer /> */}
                 <canvas
                     ref={this.canvas_ref}
                     width={this.props.grid.grid_width}
