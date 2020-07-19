@@ -121,51 +121,74 @@ class GraphVisual extends Component {
     redraw_all() {
         const canvas = this.canvas_ref.current
         const ctx = canvas.getContext('2d')
+        ctx.strokeStyle = 'grey'
         ctx.setTransform()
         ctx.clearRect(0, 0, canvas.width, canvas.height)
         this.DEBUG_COUNT = 0
-        this.draw_cells()
+        ctx.lineWidth = 1
+        this.draw_grid_lines(ctx)
         this.draw_axis(ctx)
         this.draw_persist_cell(ctx)
         console.log('Debug Count: ' + this.DEBUG_COUNT)
     }
 
-    draw_cells() {
-        const canvas = this.canvas_ref.current
-        const ctx = canvas.getContext('2d')
-        //Clockwise Quadrants: DO NOT CHANGE
-        this.draw_quadrant(ctx, { x: 0, y: 0 }) //0
-        this.draw_quadrant(ctx, { x: this.props.grid.grid_width, y: 0 }) //1
-        this.draw_quadrant(ctx, { x: this.props.grid.grid_width, y: this.props.grid.grid_height }) //2
-        this.draw_quadrant(ctx, { x: 0, y: this.props.grid.grid_height }) //3
-        this.draw_axis(ctx)
-    }
-
-    // OPTIMISATION IDEAS:
-    // - Draw lines instead of cells and then just consider space between lines
-    draw_quadrant(ctx, quad_limit) {
-        const x_incr = this.props.grid.origin.x > quad_limit.x ? -1 : 1
-        const y_incr = this.props.grid.origin.y > quad_limit.y ? 1 : -1
-        const wrt_cell = {
-            x: this.props.grid.origin.x / this.props.grid.cell_info.cell_size + (x_incr > 0 ? 0 : -1),
-            y: this.props.grid.origin.y / this.props.grid.cell_info.cell_size + (y_incr > 0 ? -1 : 0),
-            width: quad_limit.x / this.props.grid.cell_info.cell_size + (x_incr > 0 ? 0 : -1),
-            height: quad_limit.y / this.props.grid.cell_info.cell_size + (y_incr < 0 ? 0 : -1),
+    draw_grid_lines(ctx) {
+        const cell_size = this.props.grid.cell_info.cell_size
+        const origin = this.props.grid.origin
+        const pre_calculation = {
+            y: {
+                positive: Math.round(origin.y / cell_size),
+                negative: Math.round((this.props.grid.grid_height - origin.y) / cell_size),
+            },
+            x: {
+                negative: Math.round(origin.x / cell_size),
+                positive: Math.round((this.props.grid.grid_width - origin.x) / cell_size),
+            },
         }
-        ctx.fillStyle = this.props.grid.cell_info.cell_color
-        ctx.strokeStyle = this.props.grid.cell_info.stroke_color
-        ctx.lineWidth = 0.75
-        // Multiply by -1 we can switch the inequality
-        for (var x = wrt_cell.x; x * x_incr < wrt_cell.width * x_incr; x += x_incr) {
-            for (var y = wrt_cell.y; y * y_incr > wrt_cell.height * y_incr; y -= y_incr) {
-                ctx.strokeRect(
-                    x * this.props.grid.cell_info.cell_size,
-                    y * this.props.grid.cell_info.cell_size,
-                    this.props.grid.cell_info.cell_size,
-                    this.props.grid.cell_info.cell_size
-                )
-                this.DEBUG_COUNT += 1
+        const y_start = {
+            y_limit_positive: Math.abs(pre_calculation.y.positive < 0 ? 0 : pre_calculation.y.positive) + 5,
+            y_limit_negative: Math.abs(pre_calculation.y.negative < 0 ? 0 : pre_calculation.y.negative) + 5,
+        }
+        console.log(y_start)
+        // Y-Axis
+        var y_limit = y_start.y_limit_positive
+        for (var y = -y_start.y_limit_positive; y <= y_start.y_limit_negative; y++) {
+            if (y === 0) {
+                y_limit = y_start.y_limit_negative
+                continue
             }
+            this.draw_line(
+                ctx,
+                { x: 0, y: origin.y + cell_size * Math.sign(y) * Math.abs(Math.abs(y) - y_limit) },
+                {
+                    x: this.props.grid.grid_width,
+                    y: origin.y + cell_size * Math.sign(y) * Math.abs(Math.abs(y) - y_limit),
+                }
+            )
+            this.DEBUG_COUNT += 1
+        }
+
+        const x_start = {
+            x_limit_negative: Math.abs(pre_calculation.x.negative < 0 ? 0 : pre_calculation.x.negative) + 5,
+            x_limit_positive: Math.abs(pre_calculation.x.positive < 0 ? 0 : pre_calculation.x.positive) + 5,
+        }
+        var x_limit = x_start.x_limit_negative
+        console.log(x_start)
+        // X-Axis
+        for (var x = -x_start.x_limit_negative; x <= x_start.x_limit_positive; x++) {
+            if (x === 0) {
+                x_limit = x_start.x_limit_positive
+                continue
+            }
+            this.draw_line(
+                ctx,
+                { x: origin.x + cell_size * Math.sign(x) * Math.abs(Math.abs(x) - x_limit), y: 0 },
+                {
+                    x: origin.x + cell_size * Math.sign(x) * Math.abs(Math.abs(x) - x_limit),
+                    y: this.props.grid.grid_height,
+                }
+            )
+            this.DEBUG_COUNT += 1
         }
     }
 
@@ -188,25 +211,35 @@ class GraphVisual extends Component {
         })
     }
 
+    //
+    draw_line(ctx, move_to, line_to) {
+        ctx.beginPath()
+        ctx.moveTo(move_to.x, move_to.y)
+        ctx.lineTo(line_to.x, line_to.y)
+        ctx.stroke()
+    }
+
+    //
     draw_axis(ctx) {
-        ctx.lineWidth = 4
+        ctx.lineWidth = 2
         ctx.strokeStyle = 'black'
-        ctx.beginPath()
-        ctx.moveTo(this.props.grid.origin.x, 0)
-        ctx.lineTo(this.props.grid.origin.x, this.props.grid.grid_height)
-        ctx.stroke()
-        ctx.strokeStyle = 'black'
-        ctx.beginPath()
-        ctx.moveTo(0, this.props.grid.origin.y)
-        ctx.lineTo(this.props.grid.grid_width, this.props.grid.origin.y)
-        ctx.stroke()
+        this.draw_line(
+            ctx,
+            { x: this.props.grid.origin.x, y: 0 },
+            { x: this.props.grid.origin.x, y: this.props.grid.grid_height }
+        )
+        this.draw_line(
+            ctx,
+            { x: 0, y: this.props.grid.origin.y },
+            { x: this.props.grid.grid_width, y: this.props.grid.origin.y }
+        )
         ctx.strokeStyle = this.props.grid.cell_info.stroke_color
     }
 
     render() {
         return (
             <div>
-                {/* <Hoverer /> */}
+                <Hoverer />
                 <canvas
                     ref={this.canvas_ref}
                     width={this.props.grid.grid_width}

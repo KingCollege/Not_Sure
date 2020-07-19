@@ -37,7 +37,7 @@ class Hoverer extends Component {
             var hovered_cells = this.state.hovered_cells
             var remove = []
             hovered_cells.forEach((obj, index) => {
-                obj.opacity -= 0.02
+                obj.opacity -= 0.04
                 if (obj.opacity <= 0) remove.push(index)
             })
             hovered_cells = hovered_cells.filter((_, index) => !remove.includes(index))
@@ -66,20 +66,28 @@ class Hoverer extends Component {
         const canvas = this.canvas_ref.current
         const ctx = canvas.getContext('2d')
         ctx.clearRect(0, 0, canvas.width, canvas.height)
-        ctx.fillStyle = 'orange'
         this.state.hovered_cells.forEach((obj) => {
             ctx.globalAlpha = obj.opacity
-            ctx.fillRect(
-                this.props.grid.origin.x -
-                    (parseInt(obj.x_wrt_origin / this.props.grid.cell_info.cell_size) + obj.x_quad) *
-                        this.props.grid.cell_info.cell_size,
-                this.props.grid.origin.y -
-                    (parseInt(obj.y_wrt_origin / this.props.grid.cell_info.cell_size) + obj.y_quad) *
-                        this.props.grid.cell_info.cell_size,
-                this.props.grid.cell_info.cell_size,
-                this.props.grid.cell_info.cell_size
-            )
+            this.draw_cell(ctx, obj, 0, 0, 'black')
+            this.draw_cell(ctx, obj, 0, -1, 'black')
+            this.draw_cell(ctx, obj, 0, 1, 'black')
+            this.draw_cell(ctx, obj, -1, 0, 'black')
+            this.draw_cell(ctx, obj, +1, 0, 'black')
         })
+    }
+
+    draw_cell(ctx, obj, x_offset, y_offset, style) {
+        ctx.fillStyle = style
+        ctx.fillRect(
+            this.props.grid.origin.x -
+                (parseInt(obj.x_wrt_origin / this.props.grid.cell_info.cell_size) + obj.x_quad + x_offset) *
+                    this.props.grid.cell_info.cell_size,
+            this.props.grid.origin.y -
+                (parseInt(obj.y_wrt_origin / this.props.grid.cell_info.cell_size) + obj.y_quad + y_offset) *
+                    this.props.grid.cell_info.cell_size,
+            this.props.grid.cell_info.cell_size,
+            this.props.grid.cell_info.cell_size
+        )
     }
 
     render() {
