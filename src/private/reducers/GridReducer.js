@@ -16,9 +16,6 @@ const initial_state = {
     grid_height: window_height,
     origin: { x: window_width / 2, y: window_height / 2, extra_offset_x: 0, extra_offset_y: 0 },
     cell_info: {
-        cell_color: '#4397AC',
-        stroke_color: 'grey',
-        stroke_width: '1',
         cell_size: 25,
         const_cell_size: 25,
         enlargement: 4,

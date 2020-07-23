@@ -84,7 +84,7 @@ class GraphVisual extends Component {
         const origin = { ...this.props.grid.origin }
         origin.x = this.x_offset + origin.extra_offset_x
         origin.y = this.y_offset + origin.extra_offset_y
-        await this.props.change_origin(origin)
+        await this.props.change_origin(origin) // Origin doesn't update immediately, so await it.
         this.redraw_all()
     }
 
@@ -122,10 +122,10 @@ class GraphVisual extends Component {
         const canvas = this.canvas_ref.current
         const ctx = canvas.getContext('2d')
         ctx.strokeStyle = 'grey'
+        ctx.lineWidth = 1
         ctx.setTransform()
         ctx.clearRect(0, 0, canvas.width, canvas.height)
         this.DEBUG_COUNT = 0
-        ctx.lineWidth = 1
         this.draw_grid_lines(ctx)
         this.draw_axis(ctx)
         this.draw_persist_cell(ctx)
@@ -135,56 +135,65 @@ class GraphVisual extends Component {
     draw_grid_lines(ctx) {
         const cell_size = this.props.grid.cell_info.cell_size
         const origin = this.props.grid.origin
+
         const pre_calculation = {
             y: {
-                positive: Math.round(origin.y / cell_size),
-                negative: Math.round((this.props.grid.grid_height - origin.y) / cell_size),
+                positive: Math.round(origin.y / cell_size) + 5, // How many lines we need from origin to edge
+                negative: Math.round((this.props.grid.grid_height - origin.y) / cell_size) + 5, // As origin changes; leftover section
             },
             x: {
-                negative: Math.round(origin.x / cell_size),
-                positive: Math.round((this.props.grid.grid_width - origin.x) / cell_size),
+                negative: Math.round(origin.x / cell_size) + 5,
+                positive: Math.round((this.props.grid.grid_width - origin.x) / cell_size) + 5,
             },
         }
-        const y_start = {
-            y_limit_positive: Math.abs(pre_calculation.y.positive < 0 ? 0 : pre_calculation.y.positive) + 5,
-            y_limit_negative: Math.abs(pre_calculation.y.negative < 0 ? 0 : pre_calculation.y.negative) + 5,
-        }
-        console.log(y_start)
+        var extra_negative = pre_calculation.y.negative < 0 ? pre_calculation.y.negative : 0
+        var extra_positive = pre_calculation.y.positive < 0 ? pre_calculation.y.positive : 0
         // Y-Axis
-        var y_limit = y_start.y_limit_positive
-        for (var y = -y_start.y_limit_positive; y <= y_start.y_limit_negative; y++) {
+        var y_limit = pre_calculation.y.positive
+        for (var y = -pre_calculation.y.positive; y <= pre_calculation.y.negative; y++) {
             if (y === 0) {
-                y_limit = y_start.y_limit_negative
+                y_limit = pre_calculation.y.negative
                 continue
             }
             this.draw_line(
                 ctx,
-                { x: 0, y: origin.y + cell_size * Math.sign(y) * Math.abs(Math.abs(y) - y_limit) },
+                {
+                    x: 0,
+                    y:
+                        origin.y +
+                        cell_size * Math.sign(y) * Math.abs(Math.abs(y) - y_limit + extra_positive + extra_negative),
+                },
                 {
                     x: this.props.grid.grid_width,
-                    y: origin.y + cell_size * Math.sign(y) * Math.abs(Math.abs(y) - y_limit),
+                    y:
+                        origin.y +
+                        cell_size * Math.sign(y) * Math.abs(Math.abs(y) - y_limit + extra_positive + extra_negative),
                 }
             )
             this.DEBUG_COUNT += 1
         }
 
-        const x_start = {
-            x_limit_negative: Math.abs(pre_calculation.x.negative < 0 ? 0 : pre_calculation.x.negative) + 5,
-            x_limit_positive: Math.abs(pre_calculation.x.positive < 0 ? 0 : pre_calculation.x.positive) + 5,
-        }
-        var x_limit = x_start.x_limit_negative
-        console.log(x_start)
+        extra_negative = pre_calculation.x.negative < 0 ? pre_calculation.x.negative + 5 : 0
+        extra_positive = pre_calculation.x.positive < 0 ? pre_calculation.x.positive + 5 : 0
+        var x_limit = pre_calculation.x.negative
         // X-Axis
-        for (var x = -x_start.x_limit_negative; x <= x_start.x_limit_positive; x++) {
+        for (var x = -pre_calculation.x.negative; x <= pre_calculation.x.positive; x++) {
             if (x === 0) {
-                x_limit = x_start.x_limit_positive
+                x_limit = pre_calculation.x.positive
                 continue
             }
             this.draw_line(
                 ctx,
-                { x: origin.x + cell_size * Math.sign(x) * Math.abs(Math.abs(x) - x_limit), y: 0 },
                 {
-                    x: origin.x + cell_size * Math.sign(x) * Math.abs(Math.abs(x) - x_limit),
+                    x:
+                        origin.x +
+                        cell_size * Math.sign(x) * Math.abs(Math.abs(x) - x_limit + extra_positive + extra_negative),
+                    y: 0,
+                },
+                {
+                    x:
+                        origin.x +
+                        cell_size * Math.sign(x) * Math.abs(Math.abs(x) - x_limit + extra_positive + extra_negative),
                     y: this.props.grid.grid_height,
                 }
             )
@@ -233,7 +242,6 @@ class GraphVisual extends Component {
             { x: 0, y: this.props.grid.origin.y },
             { x: this.props.grid.grid_width, y: this.props.grid.origin.y }
         )
-        ctx.strokeStyle = this.props.grid.cell_info.stroke_color
     }
 
     render() {
