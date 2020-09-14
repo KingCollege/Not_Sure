@@ -1,1 +1,3 @@
 An in-development web app that is inspired by https://www.desmos.com/calculator. The application will serve as a visualisation for graph based algorithms such as Dijkstra's Algorithm, Edmonds–Karp algorithm etc...
+
+It is not yet hosted, to run use standard cli commands for react apps.
